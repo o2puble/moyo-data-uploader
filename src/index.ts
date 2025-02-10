@@ -95,6 +95,19 @@ type CityRow = {
   filepath: string;
   updated_at: string;
 };
+
+const checkIfFileExists = (filepath: string) => {
+  const absolutePath = path.resolve(__dirname, filepath); // Use absolute path
+  if (!fs.existsSync(absolutePath))
+    throw new Error(`File is not exists: ${absolutePath}`);
+  try {
+    fs.accessSync(absolutePath, fs.constants.R_OK);
+  } catch (err) {
+    throw new Error(`File not readable: ${absolutePath}`);
+  }
+  return absolutePath;
+};
+
 const uploadCities = async (dirname: string, filename: string) => {
   const prefix = "[City Data Update] ";
   const apiUrl = `${strapiUrl}/api/destinations`;
@@ -118,122 +131,127 @@ const uploadCities = async (dirname: string, filename: string) => {
       return;
     }
 
-    fs.createReadStream(filePath)
-      .pipe(csv())
-      .on("data", (data) => results.push(data))
-      .on("end", async () => {
-        const rows = results
-          .filter((e) => e.updated_at.localeCompare(lastUpdatedAt) > 0)
-          .filter(
-            (e) =>
-              e.category1 &&
-              e.category2 &&
-              e.country &&
-              e.image_exists.toLowerCase() === "o" &&
-              e.filepath &&
-              e.updated_at,
+    const rows = await new Promise<CityRow[]>((resolve, reject) => {
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on("data", (data) => results.push(data))
+        .on("end", async () => {
+          resolve(
+            results
+              .filter((e) => e.updated_at.localeCompare(lastUpdatedAt) > 0)
+              .filter(
+                (e) =>
+                  e.category1 &&
+                  e.category2 &&
+                  e.country &&
+                  e.image_exists.toLowerCase() === "o" &&
+                  e.filepath &&
+                  e.updated_at,
+              ),
           );
+        })
+        .on("error", (err) => reject(err));
+    });
 
-        if (rows.length === 0) {
-          console.log(
-            prefix + "There's no new cities after updated on ",
-            lastUpdatedAt,
-          );
-          return;
-        }
+    if (rows.length === 0) {
+      console.log(
+        prefix + "There's no new cities after updated on ",
+        lastUpdatedAt,
+      );
+      return;
+    }
 
+    console.log(
+      prefix + "Found cities to update",
+      rows.map(
+        (e) =>
+          `${e.country}/${e.city} - image: ${e.filepath} - updated_at: ${e.updated_at}`,
+      ),
+      `${apiUrl}/${apiToken}`,
+    );
+
+    rows.forEach((row) => checkIfFileExists(row.filepath));
+
+    const existingEntitiesResponse = await fetch(apiUrl, {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!existingEntitiesResponse.ok) {
+      // Check for HTTP errors (status codes outside 200-299)
+      const errorText = await existingEntitiesResponse.text(); // Get the error message
+      console.error(
+        `Strapi API Error: ${existingEntitiesResponse.status} - ${errorText}`,
+      );
+      // Handle the error appropriately (e.g., throw an exception, return an empty array)
+      return; // Or throw new Error(`Strapi API Error: ${existingEntitiesResponse.status}`);
+    }
+    const existingEntities = (await existingEntitiesResponse.json()) as {
+      data: Record<string, any>[];
+    };
+
+    for (const row of rows) {
+      const chunk = row.filepath.split("/");
+      const mediaUploaded = await uploadFile(
+        join(dirname, row.filepath),
+        chunk.at(-1)!,
+      );
+
+      if (!mediaUploaded?.id) continue;
+
+      const category1 = chunk[0];
+      const category2 = chunk[1];
+
+      const existingEntity = existingEntities.data.find(
+        (e: any) =>
+          e.country === row.country && (e.city ? e.city === row.city : true),
+      );
+
+      if (existingEntity) {
         console.log(
-          prefix + "Inserting cities",
-          rows.map(
-            (e) =>
-              `${e.country}/${e.city} - image: ${e.filepath} - updated_at: ${e.updated_at}`,
-          ),
-          `${apiUrl}/${apiToken}`,
+          prefix +
+            ` ${row.country}/${row.city} already exists. It updates image only...`,
         );
 
-        const existingEntitiesResponse = await fetch(apiUrl, {
+        await fetch(`${apiUrl}/${existingEntity.id}`, {
+          method: "PUT",
           headers: {
-            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
             Accept: "application/json",
+            Authorization: `Bearer ${apiToken}`,
           },
+          body: JSON.stringify({ data: { image: mediaUploaded.id } }),
         });
-        if (!existingEntitiesResponse.ok) {
-          // Check for HTTP errors (status codes outside 200-299)
-          const errorText = await existingEntitiesResponse.text(); // Get the error message
-          console.error(
-            `Strapi API Error: ${existingEntitiesResponse.status} - ${errorText}`,
-          );
-          // Handle the error appropriately (e.g., throw an exception, return an empty array)
-          return; // Or throw new Error(`Strapi API Error: ${existingEntitiesResponse.status}`);
-        }
-        const existingEntities = (await existingEntitiesResponse.json()) as {
-          data: Record<string, any>[];
-        };
+      } else {
+        console.log(prefix + `${row.country}/${row.city} will be created...`);
 
-        for (const row of rows) {
-          const chunk = row.filepath.split("/");
-          const mediaUploaded = await uploadFile(
-            join(dirname, row.filepath),
-            chunk.at(-1)!,
-          );
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${apiToken}`,
+          },
+          body: JSON.stringify({
+            data: {
+              country: row.country,
+              city: row.city ?? null,
+              disabled: false,
+              category1,
+              category2,
+              image: mediaUploaded.id,
+            },
+          }),
+        });
+      }
+    }
+    console.log(prefix + "City updated successfully.");
 
-          if (!mediaUploaded?.id) continue;
+    const todayDate = new Date().toISOString().split("T")[0];
 
-          const category1 = chunk[0];
-          const category2 = chunk[1];
-
-          const existingEntity = existingEntities.data.find(
-            (e: any) =>
-              e.country === row.country &&
-              (e.city ? e.city === row.city : true),
-          );
-
-          if (existingEntity) {
-            console.log(
-              prefix +
-                ` ${row.country}/${row.city} already exists. It updates image only...`,
-            );
-
-            await fetch(`${apiUrl}/${existingEntity.id}`, {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                Authorization: `Bearer ${apiToken}`,
-              },
-              body: JSON.stringify({ data: { image: mediaUploaded.id } }),
-            });
-          } else {
-            console.log(
-              prefix + `${row.country}/${row.city} will be created...`,
-            );
-
-            await fetch(apiUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                Authorization: `Bearer ${apiToken}`,
-              },
-              body: JSON.stringify({
-                data: {
-                  country: row.country,
-                  city: row.city ?? null,
-                  disabled: false,
-                  category1,
-                  category2,
-                  image: mediaUploaded.id,
-                },
-              }),
-            });
-          }
-        }
-        console.log(prefix + "City updated successfully.");
-
-        const todayDate = new Date().toISOString().split("T")[0];
-
-        fs.writeFileSync(lastDateFilePath, todayDate, "utf-8");
-      });
+    fs.writeFileSync(lastDateFilePath, todayDate, "utf-8");
   } catch (error) {
     console.error(prefix + "An error occurred while inserting cities.", error);
   }
@@ -247,17 +265,7 @@ const uploadFile = async (
   if (!apiToken) throw new Error("env.STRAPI_API_TOKEN is needed");
 
   try {
-    const absolutePath = path.resolve(__dirname, filepath); // Use absolute path
-    console.log(
-      `>>>> uploadFile: ${absolutePath} filename: ${filename} to ${strapiUrl}`,
-    );
-    console.log("Absolute File Path:", absolutePath); // Log the path
-    if (!fs.existsSync(absolutePath)) throw new Error("File is not exists");
-    try {
-      fs.accessSync(absolutePath, fs.constants.R_OK);
-    } catch (err) {
-      throw new Error(`File not readable: ${absolutePath}`);
-    }
+    const absolutePath = checkIfFileExists(filepath);
 
     const form = new FormData();
     // const readStream = fs.createReadStream(absolutePath);
@@ -299,7 +307,7 @@ const uploadFile = async (
     return json[0] as { id: number };
   } catch (error) {
     console.error(">>> file uploading failed", error);
-    return null;
+    throw error;
   }
 };
 
