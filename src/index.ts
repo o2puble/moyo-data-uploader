@@ -29,6 +29,7 @@ const initDefaultData = async () => {
     "companion_review_types",
   );
   await run(`${strapiUrl}/api/notification-types`, "notification_types");
+  await run(`${strapiUrl}/api/report-types`, "report_types");
 
   if (cityDataDirName && fs.existsSync(cityDataDirName)) {
     await uploadCities(cityDataDirName, "cities.csv");
