@@ -22,10 +22,13 @@ if (!apiToken) {
 }
 
 const initDefaultData = async () => {
-  // await run(`${strapiUrl}/api/travel-types`, "travel_types");
-  // await run(`${strapiUrl}/api/companion-types`, "companion_types");
-  // await run(`${strapiUrl}/api/companion-review-types`, "companion_review_types");
-  // await run(`${strapiUrl}/api/notification-types`, "notification_types");
+  await run(`${strapiUrl}/api/travel-types`, "travel_types");
+  await run(`${strapiUrl}/api/companion-types`, "companion_types");
+  await run(
+    `${strapiUrl}/api/companion-review-types`,
+    "companion_review_types",
+  );
+  await run(`${strapiUrl}/api/notification-types`, "notification_types");
 
   if (cityDataDirName && fs.existsSync(cityDataDirName)) {
     await uploadCities(cityDataDirName, "cities.csv");
@@ -52,7 +55,7 @@ const run = async (apiUrl: string, filename: string) => {
     }
 
     const results: ({ name: string } & Record<string, unknown>)[] = [];
-    const filePath = path.join(process.cwd(), `data/${filename}.csv`);
+    const filePath = path.join(process.cwd(), `default_data/${filename}.csv`);
 
     fs.createReadStream(filePath)
       .pipe(csv())
