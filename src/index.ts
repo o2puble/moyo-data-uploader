@@ -212,7 +212,7 @@ const uploadCities = async (dirname: string, filename: string) => {
     if (!mediaUploaded?.id) continue;
 
     const category1 = row.category1;
-    const category2 = row.category2?.length ? row.category2 : chunk[1];
+    const category2 = row.category2;
 
     const existingEntity =
       existingEntities.data.length > 0 ? existingEntities.data[0] : null;
@@ -220,10 +220,10 @@ const uploadCities = async (dirname: string, filename: string) => {
     if (existingEntity) {
       console.log(
         prefix +
-          ` ${row.country}/${row.city} already exists. It updates image only...`,
+          `${category1}/${category2} - ${row.country}/${row.city} already exists. category1, category2 and image will be updated...`,
       );
 
-      await fetch(`${apiUrl}/${existingEntity.id}`, {
+      const res = await fetch(`${apiUrl}/${existingEntity.documentId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -238,10 +238,14 @@ const uploadCities = async (dirname: string, filename: string) => {
           },
         }),
       });
+      if (!res.ok) throw new Error(await res.text());
     } else {
-      console.log(prefix + `${row.country}/${row.city} will be created...`);
+      console.log(
+        prefix +
+          `${category1}/${category2} - ${row.country}/${row.city} will be created...`,
+      );
 
-      await fetch(apiUrl, {
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,9 +263,10 @@ const uploadCities = async (dirname: string, filename: string) => {
           },
         }),
       });
+      if (!res.ok) throw new Error(await res.text());
     }
   }
-  console.log(prefix + "City updated successfully.");
+  console.log(prefix + `${rows.length} cities updated successfully.`);
 
   const todayDate = new Date().toISOString().split("T")[0];
 
@@ -293,7 +298,7 @@ const uploadFile = async (
     form.append("files", fs.createReadStream(absolutePath));
 
     const headers = form.getHeaders();
-    console.log("headers", headers, "readable", form.readable);
+    // console.log("headers", headers, "readable", form.readable);
 
     const response = await fetch(`${strapiUrl}/api/upload`, {
       method: "POST",
