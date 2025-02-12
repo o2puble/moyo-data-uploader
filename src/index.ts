@@ -238,7 +238,7 @@ const uploadCities = async (dirname: string, filename: string) => {
           data: {
             category1,
             category2,
-            image: mediaUploaded.id,
+            images: [mediaUploaded.id],
           },
         }),
       });
@@ -263,7 +263,7 @@ const uploadCities = async (dirname: string, filename: string) => {
             disabled: false,
             category1,
             category2,
-            image: mediaUploaded.id,
+            images: [mediaUploaded.id],
           },
         }),
       });
@@ -288,18 +288,18 @@ const uploadFile = async (
     const absolutePath = checkIfFileExists(filepath);
 
     const form = new FormData();
-    // const readStream = fs.createReadStream(absolutePath);
-    // readStream.on("error", (err) => {
-    //   console.error("File stream error:", err);
-    //   return; // Or throw the error
-    // });
-    // const fileSize = readStream.readableLength;
-    // form.append("files", readStream, {
-    //   filename,
-    //   contentType: mimeType,
-    //   knownLength: fileSize,
-    // });
-    form.append("files", fs.createReadStream(absolutePath));
+    const readStream = fs.createReadStream(absolutePath);
+    readStream.on("error", (err) => {
+      console.error("File stream error:", err);
+      return; // Or throw the error
+    });
+    const fileSize = readStream.readableLength;
+    form.append("files", readStream, {
+      filename,
+      contentType: mimeType,
+      knownLength: fileSize,
+    });
+    // form.append("files", fs.createReadStream(absolutePath));
 
     const headers = form.getHeaders();
     // console.log("headers", headers, "readable", form.readable);
