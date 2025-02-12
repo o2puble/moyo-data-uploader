@@ -96,6 +96,7 @@ type CityRow = {
   category2: string;
   country: string;
   city?: string | null;
+  order: number;
   image_exists: string;
   filepath: string;
   updated_at: string;
@@ -111,6 +112,50 @@ const checkIfFileExists = (filepath: string) => {
     throw new Error(`File not readable: ${absolutePath}`);
   }
   return absolutePath;
+};
+
+const createDestination = async (data: Partial<CityRow>, image: number) => {
+  const apiUrl = `${strapiUrl}/api/destinations`;
+  const res = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiToken}`,
+    },
+    body: JSON.stringify({
+      data: {
+        data,
+        disabled: false,
+        images: [image],
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+};
+
+const updateDestination = async (
+  documentId: string,
+  data: Partial<CityRow>,
+  images: number[],
+) => {
+  const apiUrl = `${strapiUrl}/api/destinations`;
+
+  const res = await fetch(`${apiUrl}/${documentId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiToken}`,
+    },
+    body: JSON.stringify({
+      data: {
+        ...data,
+        images,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
 };
 
 const uploadCities = async (dirname: string, filename: string) => {
@@ -185,6 +230,7 @@ const uploadCities = async (dirname: string, filename: string) => {
         country: row.country,
         city: row.city,
       },
+      populate: ["images"],
     });
 
     const existingEntitiesResponse = await fetch(apiUrl + "?" + query, {
@@ -208,6 +254,9 @@ const uploadCities = async (dirname: string, filename: string) => {
     };
 
     const chunk = row.filepath.split("/");
+    const existingEntity =
+      existingEntities.data.length > 0 ? existingEntities.data[0] : null;
+
     const mediaUploaded = await uploadFile(
       join(dirname, row.filepath),
       chunk.at(-1)!,
@@ -218,58 +267,40 @@ const uploadCities = async (dirname: string, filename: string) => {
     const category1 = row.category1;
     const category2 = row.category2;
 
-    const existingEntity =
-      existingEntities.data.length > 0 ? existingEntities.data[0] : null;
-
     if (existingEntity) {
       console.log(
         prefix +
-          `${category1}/${category2} - ${row.country}/${row.city} already exists. category1, category2 and image will be updated...`,
+          `${category1}/${category2} - ${row.country}/${row.city} already exists. category1, category2 and images[${row.order}] will be updated...`,
+      );
+      console.log(
+        prefix + `existing images ${existingEntity.images.map((e) => e.id)}`,
       );
 
-      const res = await fetch(`${apiUrl}/${existingEntity.documentId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${apiToken}`,
-        },
-        body: JSON.stringify({
-          data: {
-            category1,
-            category2,
-            images: [mediaUploaded.id],
-          },
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      const images: number[] = (existingEntity.images ?? []).map(
+        (image, index) =>
+          index === Number(row.order) ? mediaUploaded.id : image.id,
+      );
+
+      if (!images.includes(mediaUploaded.id)) {
+        images.push(mediaUploaded.id);
+      }
+
+      console.log(prefix + "update with new images", images);
+      await updateDestination(
+        existingEntity.documentId,
+        { category1, category2 },
+        images,
+      );
     } else {
       console.log(
         prefix +
           `${category1}/${category2} - ${row.country}/${row.city} will be created...`,
       );
 
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${apiToken}`,
-        },
-        body: JSON.stringify({
-          data: {
-            country: row.country,
-            city: row.city ?? null,
-            disabled: false,
-            category1,
-            category2,
-            images: [mediaUploaded.id],
-          },
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await createDestination(row, mediaUploaded.id);
     }
   }
+
   console.log(prefix + `${rows.length} cities updated successfully.`);
 
   const todayDate = new Date().toISOString().split("T")[0];
