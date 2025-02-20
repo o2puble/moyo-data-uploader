@@ -125,7 +125,7 @@ const createDestination = async (data: Partial<CityRow>, image: number) => {
     },
     body: JSON.stringify({
       data: {
-        data,
+        ...data,
         disabled: false,
         images: [image],
       },
