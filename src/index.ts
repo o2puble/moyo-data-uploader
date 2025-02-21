@@ -1,11 +1,14 @@
-import fs from "fs";
+import fs, { existsSync } from "fs";
 import path, { join } from "path";
 import csv from "csv-parser";
 import FormData from "form-data";
 import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import lodash from "lodash";
 import qs from "qs";
+
+const { pick } = lodash;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -16,6 +19,8 @@ const cityDataDirName = process.env.CITY_DATA_FOLDER;
 
 const strapiUrl = process.env.STRAPI_URL || "http://localhost:1337"; // Strapi URL
 const apiToken = process.env.STRAPI_API_TOKEN;
+
+const pickingProperties = ["category1", "category2", "country", "city"];
 
 if (!apiToken) {
   throw new Error("env.STRAPI_API_TOKEN is required");
@@ -40,12 +45,24 @@ const run = async (apiUrl: string, filename: string) => {
   try {
     console.log(`Initialize table with default values:: ${apiUrl}`);
 
+    const filePath = path.join(process.cwd(), `default_data/${filename}.csv`);
+    console.log(">>>> defaultData filePath:", filePath, existsSync(filePath));
+
     const existingEntitiesResponse = await fetch(apiUrl, {
       headers: {
         Authorization: `Bearer ${apiToken}`,
         Accept: "application/json",
       },
     });
+    if (existingEntitiesResponse.status === 401) {
+      console.log("Not Authenticated");
+      throw new Error("Not Authenticated");
+    }
+    if (existingEntitiesResponse.status === 403) {
+      console.log("Not Authorizad");
+      throw new Error("Not Authorizad");
+    }
+
     const existingEntities = (await existingEntitiesResponse.json()) as {
       data: Record<string, any>[];
     };
@@ -56,7 +73,6 @@ const run = async (apiUrl: string, filename: string) => {
     }
 
     const results: ({ name: string } & Record<string, unknown>)[] = [];
-    const filePath = path.join(process.cwd(), `default_data/${filename}.csv`);
 
     fs.createReadStream(filePath)
       .pipe(csv())
@@ -125,7 +141,7 @@ const createDestination = async (data: Partial<CityRow>, image: number) => {
     },
     body: JSON.stringify({
       data: {
-        ...data,
+        ...pick(data, pickingProperties),
         disabled: false,
         images: [image],
       },
@@ -150,7 +166,7 @@ const updateDestination = async (
     },
     body: JSON.stringify({
       data: {
-        ...data,
+        ...pick(data, pickingProperties),
         images,
       },
     }),
