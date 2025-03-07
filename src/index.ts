@@ -20,6 +20,8 @@ const cityDataDirName = process.env.CITY_DATA_FOLDER;
 const strapiUrl = process.env.STRAPI_URL || "http://localhost:1337"; // Strapi URL
 const apiToken = process.env.STRAPI_API_TOKEN;
 
+console.table({ strapiUrl, apiToken });
+
 const pickingProperties = ["category1", "category2", "country", "city"];
 
 if (!apiToken) {
@@ -289,7 +291,7 @@ const uploadCities = async (dirname: string, filename: string) => {
           `${category1}/${category2} - ${row.country}/${row.city} already exists. category1, category2 and images[${row.order}] will be updated...`,
       );
       console.log(
-        prefix + `existing images ${existingEntity.images.map((e) => e.id)}`,
+        prefix + `existing images ${existingEntity.images?.map((e) => e.id)}`,
       );
 
       const images: number[] = (existingEntity.images ?? []).map(

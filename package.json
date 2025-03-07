@@ -4,7 +4,10 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "start": "node --require dotenv/config bin/index.js"
+    "prestart": "npm run build",
+    "start": "node --require dotenv/config bin/index.js",
+    "prestart:prod": "npm run build",
+    "start:prod": "DOTENV_CONFIG_PATH=.env.production node --require dotenv/config bin/index.js"
   },
   "type": "module",
   "exports": {
