@@ -5,3 +5,9 @@ name,type
 개인정보 노출,report
 부적절한 이미지 사용,report
 주제와 무관,report
+"마음이 잘 맞는 동행이 없어요. (관심사, 나이, 성별)",withdrawal
+가까운 지역의 동행이 없어요.,withdrawal
+"원하는 기능이 없거나, 이용이 불편해요.",withdrawal
+비매너 여행자를 만났어요.,withdrawal
+운영 정책에 아쉬운 부분이 있어요.,withdrawal
+기타,withdrawal
