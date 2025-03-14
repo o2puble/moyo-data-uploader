@@ -37,7 +37,7 @@ const initDefaultData = async () => {
   );
   await run(`${strapiUrl}/api/notification-types`, "notification_types");
   await run(`${strapiUrl}/api/report-types`, "report_types");
-  await run(`${strapiUrl}/api/report-types`, "terms_agreements");
+  await run(`${strapiUrl}/api/term-agreements`, "term_agreements");
 
   if (cityDataDirName && fs.existsSync(cityDataDirName)) {
     await uploadCities(cityDataDirName, "cities.csv");
@@ -84,8 +84,6 @@ const run = async (apiUrl: string, filename: string) => {
         console.log("@@@ inserting", results);
 
         for (const row of results) {
-          if (!row.name) continue;
-
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
